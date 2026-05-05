@@ -44,6 +44,10 @@ app.patch('/api/tasks/:id/toggle', (req, res) => {
   res.json(updatedTask);
 });
 
-app.listen(3001, () => {
-  console.log('API running on http://localhost:3001');
-});
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(3001, () => {
+    console.log('API running on http://localhost:3001');
+  });
+}
+
+module.exports = app;
