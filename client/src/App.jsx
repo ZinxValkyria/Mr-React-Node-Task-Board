@@ -1,210 +1,275 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
+import KanbanBoard from './components/KanbanBoard';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import TaskModal from './components/TaskModal';
+import AdvancedFilters from './components/AdvancedFilters';
 
-const priorityColors = {
-  High: 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30',
-  Medium: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30',
-  Low: 'bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-500/30',
-};
+const API_URL = 'http://localhost:3001';
 
 function App() {
   const [tasks, setTasks] = useState([]);
+  const [view, setView] = useState('kanban');
+  const [loading, setLoading] = useState(true);
+  const [selectedTask, setSelectedTask] = useState(null);
+  const [filters, setFilters] = useState({
+    status: null,
+    priority: null,
+    category: null,
+    search: ''
+  });
   const [form, setForm] = useState({
     title: '',
     category: 'General',
     priority: 'Medium',
+    estimatedTime: 120
   });
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/tasks')
-      .then((res) => res.json())
-      .then((data) => setTasks(data))
-      .catch((err) => console.error(err));
-  }, []);
+    fetchTasks();
+  }, [filters]);
 
-  const stats = useMemo(() => {
-    const total = tasks.length;
-    const done = tasks.filter((task) => task.done).length;
-    const open = total - done;
-    const high = tasks.filter((task) => task.priority === 'High').length;
-    return { total, done, open, high };
-  }, [tasks]);
+  const fetchTasks = async () => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams();
+      if (filters.status) params.append('status', filters.status);
+      if (filters.priority) params.append('priority', filters.priority);
+      if (filters.category) params.append('category', filters.category);
+      if (filters.search) params.append('search', filters.search);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!form.title.trim()) return;
-
-    const res = await fetch('http://localhost:3001/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
-
-    const newTask = await res.json();
-    setTasks((prev) => [newTask, ...prev]);
-    setForm({ title: '', category: 'General', priority: 'Medium' });
+      const res = await fetch(`${API_URL}/api/tasks?${params}`);
+      const data = await res.json();
+      setTasks(data);
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const toggleTask = async (id) => {
-    const res = await fetch(`http://localhost:3001/api/tasks/${id}/toggle`, {
-      method: 'PATCH',
-    });
+  const handleCreateTask = async (e) => {
+    e.preventDefault();
+    if (!form.title.trim()) return;
 
-    const updatedTask = await res.json();
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? updatedTask : task))
-    );
+    try {
+      const res = await fetch(`${API_URL}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const newTask = await res.json();
+      setTasks(prev => [newTask, ...prev]);
+      setForm({ title: '', category: 'General', priority: 'Medium', estimatedTime: 120 });
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleUpdateTask = async (id, updates) => {
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates),
+      });
+      const updated = await res.json();
+      setTasks(prev => prev.map(t => t.id === id ? updated : t));
+      if (selectedTask?.id === id) setSelectedTask(updated);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleAddNote = async (taskId, text) => {
+    try {
+      await fetch(`${API_URL}/api/tasks/${taskId}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, author: 'You' }),
+      });
+      await fetchTasks();
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
+  const handleDeleteTask = async (id) => {
+    try {
+      await fetch(`${API_URL}/api/tasks/${id}`, { method: 'DELETE' });
+      setTasks(prev => prev.filter(t => t.id !== id));
+      setSelectedTask(null);
+    } catch (err) {
+      console.error(err);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="mx-auto max-w-6xl px-6 py-10">
-        <div className="mb-10 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-          <div>
-            <p className="mb-2 text-sm font-medium uppercase tracking-[0.2em] text-cyan-400">
-              React + Express
-            </p>
-            <h1 className="text-4xl font-bold tracking-tight md:text-5xl">
-              Project Command Center
-            </h1>
-            <p className="mt-3 max-w-2xl text-slate-400">
-              A more polished full-stack starter with a Tailwind UI, live stats,
-              and task management backed by your Express API.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300 shadow-2xl shadow-cyan-950/30">
-            API: <span className="font-semibold text-cyan-300">localhost:3001</span>
-          </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 text-slate-100">
+      <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <p className="text-sm font-medium uppercase tracking-widest text-cyan-400">Advanced Task Management</p>
+          <h1 className="text-5xl font-bold tracking-tight mt-2">Task Command Center</h1>
+          <p className="text-slate-400 mt-3">Full-featured task management with Kanban, analytics, and time tracking</p>
         </div>
 
-        <div className="mb-8 grid gap-4 md:grid-cols-4">
-          <StatCard label="Total tasks" value={stats.total} />
-          <StatCard label="Open" value={stats.open} />
-          <StatCard label="Completed" value={stats.done} />
-          <StatCard label="High priority" value={stats.high} />
+        {/* View Toggle */}
+        <div className="mb-8 flex gap-3 flex-wrap">
+          {['kanban', 'analytics', 'list'].map(v => (
+            <button
+              key={v}
+              onClick={() => setView(v)}
+              className={`px-6 py-2 rounded-xl font-medium transition-all ${
+                view === v
+                  ? 'bg-cyan-500 text-slate-950 shadow-lg shadow-cyan-500/30'
+                  : 'bg-slate-800/50 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              {v.charAt(0).toUpperCase() + v.slice(1)}
+            </button>
+          ))}
         </div>
 
-        <div className="grid gap-8 lg:grid-cols-[380px_minmax(0,1fr)]">
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <h2 className="text-xl font-semibold">Add task</h2>
-            <p className="mt-2 text-sm text-slate-400">
-              Create a new task and send it straight to your Node API.
-            </p>
-
-            <form onSubmit={handleSubmit} className="mt-6 space-y-4">
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Title</label>
+        {/* Main Content */}
+        <div className="grid gap-8 lg:grid-cols-[320px_1fr]">
+          {/* Sidebar: Form + Filters */}
+          <div className="space-y-6">
+            {/* Create Task Form */}
+            <div className="rounded-2xl border border-white/10 bg-slate-900/50 p-6 backdrop-blur">
+              <h2 className="font-semibold text-lg mb-4">Create Task</h2>
+              <form onSubmit={handleCreateTask} className="space-y-4">
                 <input
                   type="text"
                   value={form.title}
-                  onChange={(e) => setForm({ ...form, title: e.target.value })}
-                  placeholder="Ship dashboard UI"
-                  className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                  onChange={(e) => setForm({...form, title: e.target.value})}
+                  placeholder="Task title..."
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-cyan-400"
                 />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Category</label>
                 <input
                   type="text"
                   value={form.category}
-                  onChange={(e) => setForm({ ...form, category: e.target.value })}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 outline-none placeholder:text-slate-500 focus:border-cyan-400"
+                  onChange={(e) => setForm({...form, category: e.target.value})}
+                  placeholder="Category..."
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-cyan-400"
                 />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm text-slate-300">Priority</label>
                 <select
                   value={form.priority}
-                  onChange={(e) => setForm({ ...form, priority: e.target.value })}
-                  className="w-full rounded-2xl border border-white/10 bg-slate-900 px-4 py-3 text-slate-100 outline-none focus:border-cyan-400"
+                  onChange={(e) => setForm({...form, priority: e.target.value})}
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-cyan-400"
                 >
                   <option>High</option>
                   <option>Medium</option>
                   <option>Low</option>
                 </select>
-              </div>
-
-              <button
-                type="submit"
-                className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300"
-              >
-                Create task
-              </button>
-            </form>
-          </section>
-
-          <section className="rounded-3xl border border-white/10 bg-white/5 p-6 shadow-2xl shadow-black/20 backdrop-blur">
-            <div className="mb-6">
-              <h2 className="text-xl font-semibold">Active tasks</h2>
-              <p className="mt-1 text-sm text-slate-400">
-                Toggle completion state and watch the UI update instantly.
-              </p>
-            </div>
-
-            <div className="space-y-4">
-              {tasks.map((task) => (
-                <div
-                  key={task.id}
-                  className={`rounded-2xl border p-4 transition ${
-                    task.done
-                      ? 'border-emerald-500/20 bg-emerald-500/10'
-                      : 'border-white/10 bg-slate-900/80'
-                  }`}
+                <input
+                  type="number"
+                  value={form.estimatedTime}
+                  onChange={(e) => setForm({...form, estimatedTime: parseInt(e.target.value)})}
+                  placeholder="Est. time (mins)..."
+                  className="w-full rounded-lg border border-white/10 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-cyan-400"
+                />
+                <button
+                  type="submit"
+                  className="w-full rounded-lg bg-cyan-500 px-4 py-2 font-semibold text-slate-950 hover:bg-cyan-400 transition"
                 >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h3
-                          className={`text-lg font-semibold ${
-                            task.done ? 'text-slate-400 line-through' : 'text-white'
-                          }`}
-                        >
-                          {task.title}
-                        </h3>
-                        <span
-                          className={`rounded-full px-3 py-1 text-xs font-medium ${priorityColors[task.priority]}`}
-                        >
-                          {task.priority}
-                        </span>
-                        <span className="rounded-full bg-white/5 px-3 py-1 text-xs text-slate-300 ring-1 ring-white/10">
-                          {task.category}
-                        </span>
-                      </div>
-
-                      <p className="mt-2 text-sm text-slate-400">
-                        Task ID: {task.id}
-                      </p>
-                    </div>
-
-                    <button
-                      onClick={() => toggleTask(task.id)}
-                      className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                        task.done
-                          ? 'bg-slate-800 text-slate-200 hover:bg-slate-700'
-                          : 'bg-emerald-400 text-slate-950 hover:bg-emerald-300'
-                      }`}
-                    >
-                      {task.done ? 'Mark as open' : 'Mark as done'}
-                    </button>
-                  </div>
-                </div>
-              ))}
+                  Create
+                </button>
+              </form>
             </div>
-          </section>
+
+            {/* Filters */}
+            <AdvancedFilters filters={filters} setFilters={setFilters} />
+          </div>
+
+          {/* Main View */}
+          <div>
+            {loading ? (
+              <div className="text-center py-12">Loading...</div>
+            ) : view === 'kanban' ? (
+              <KanbanBoard
+                tasks={tasks}
+                onUpdateTask={handleUpdateTask}
+                onSelectTask={setSelectedTask}
+              />
+            ) : view === 'analytics' ? (
+              <AnalyticsDashboard tasks={tasks} />
+            ) : (
+              <ListView
+                tasks={tasks}
+                onUpdateTask={handleUpdateTask}
+                onSelectTask={setSelectedTask}
+                onDeleteTask={handleDeleteTask}
+              />
+            )}
+          </div>
         </div>
       </div>
+
+      {/* Task Detail Modal */}
+      {selectedTask && (
+        <TaskModal
+          task={selectedTask}
+          onClose={() => setSelectedTask(null)}
+          onUpdate={handleUpdateTask}
+          onAddNote={handleAddNote}
+          onDelete={handleDeleteTask}
+        />
+      )}
     </div>
   );
 }
 
-function StatCard({ label, value }) {
+function ListView({ tasks, onUpdateTask, onSelectTask, onDeleteTask }) {
+  const priorityColors = {
+    High: 'bg-red-500/20 text-red-300',
+    Medium: 'bg-amber-500/20 text-amber-300',
+    Low: 'bg-emerald-500/20 text-emerald-300'
+  };
+
+  const statusColors = {
+    'To Do': 'bg-slate-500/20 text-slate-300',
+    'In Progress': 'bg-blue-500/20 text-blue-300',
+    'Done': 'bg-emerald-500/20 text-emerald-300'
+  };
+
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/5 p-5 shadow-lg shadow-black/20">
-      <p className="text-sm text-slate-400">{label}</p>
-      <p className="mt-3 text-3xl font-bold text-white">{value}</p>
+    <div className="space-y-3">
+      {tasks.map(task => (
+        <div
+          key={task.id}
+          onClick={() => onSelectTask(task)}
+          className="rounded-xl border border-white/10 bg-slate-900/50 p-4 hover:bg-slate-800/50 transition cursor-pointer group"
+        >
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="font-medium group-hover:text-cyan-300 transition">{task.title}</h3>
+              <div className="flex gap-2 mt-2 flex-wrap">
+                <span className={`text-xs px-2 py-1 rounded ${statusColors[task.status]}`}>
+                  {task.status}
+                </span>
+                <span className={`text-xs px-2 py-1 rounded ${priorityColors[task.priority]}`}>
+                  {task.priority}
+                </span>
+                <span className="text-xs px-2 py-1 rounded bg-white/5 text-slate-400">
+                  {task.category}
+                </span>
+              </div>
+            </div>
+            <div className="text-right text-sm text-slate-400">
+              <div>{task.timeSpent}m / {task.estimatedTime}m</div>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDeleteTask(task.id);
+                }}
+                className="text-red-400 hover:text-red-300 text-xs mt-2"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
