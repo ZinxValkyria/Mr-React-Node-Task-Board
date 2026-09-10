@@ -28,7 +28,6 @@ jobs:
     - name: Audit client dependencies
       working-directory: ./client
       run: npm audit --audit-level=moderate
-      continue-on-error: true
 
     - name: Install server dependencies
       working-directory: ./server
@@ -37,7 +36,6 @@ jobs:
     - name: Audit server dependencies
       working-directory: ./server
       run: npm audit --audit-level=moderate
-      continue-on-error: true
 
   code-quality:
     runs-on: ubuntu-latest
