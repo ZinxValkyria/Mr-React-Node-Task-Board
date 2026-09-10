@@ -27,7 +27,7 @@ simple-react-node-app/
 ## Getting Started
 
 ### Prerequisites
-- Node.js 16+ and npm
+- Node.js 20+ and npm
 
 ### Installation
 
@@ -41,7 +41,7 @@ cd simple-react-node-app
 ```bash
 # Install client dependencies
 cd client
-npm install
+npm ci
 cd ..
 
 # Install server dependencies
@@ -66,7 +66,7 @@ The frontend will be available at `http://localhost:5173`
 cd server
 npm start
 ```
-The backend API will be available at `http://localhost:3000`
+The backend API will be available at `http://localhost:3001`
 
 ### Development Scripts
 
@@ -77,7 +77,7 @@ The backend API will be available at `http://localhost:3000`
 - `npm run preview` - Preview production build
 
 **Server:**
-- `npm test` - Run tests (not yet configured)
+- `npm test` - Run the Jest/Supertest API test suite
 
 ## Building for Production
 
@@ -97,21 +97,23 @@ Create `.env` files in each directory as needed:
 
 **client/.env** (if needed):
 ```
-VITE_API_URL=http://localhost:3000
+VITE_API_URL=http://localhost:3001
 ```
 
 **server/.env** (if needed):
 ```
-PORT=3000
+PORT=3001
+CORS_ORIGIN=http://localhost:5173
 NODE_ENV=development
 ```
 
 ## CI/CD Pipeline
 
 This project includes GitHub Actions workflows for:
-- **Testing** - Linting and code validation
-- **Scanning** - Dependency vulnerability scanning
-- **Deployment** - Automated deployment on main branch
+- **Testing** - linting, client builds, and API tests on Node 20 and 22
+- **Scanning** - daily dependency vulnerability scanning
+
+Vercel builds the React client and routes `/api/*` requests to the Express serverless function. The current task store is in memory, so data resets when the server or serverless instance restarts. Configure persistent storage before treating this as a production task system.
 
 See `.github/workflows/` for workflow definitions.
 

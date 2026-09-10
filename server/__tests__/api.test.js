@@ -43,6 +43,21 @@ describe('Tasks API', () => {
       expect(response.body).toHaveProperty('error');
     });
 
+    it('should reject an invalid priority', async () => {
+      const response = await request(app)
+        .post('/api/tasks')
+        .send({ title: 'Invalid task', priority: 'Urgent' });
+      expect(response.status).toBe(400);
+      expect(response.body.error).toMatch(/Priority/);
+    });
+
+    it('should reject a blank title', async () => {
+      const response = await request(app)
+        .post('/api/tasks')
+        .send({ title: '   ' });
+      expect(response.status).toBe(400);
+    });
+
     it('should use default category if not provided', async () => {
       const response = await request(app)
         .post('/api/tasks')
@@ -53,6 +68,12 @@ describe('Tasks API', () => {
   });
 
   describe('PATCH /api/tasks/:id/toggle', () => {
+    it('should return 404 for an unknown task', async () => {
+      const response = await request(app).patch('/api/tasks/999999999/toggle');
+      expect(response.status).toBe(404);
+      expect(response.body.error).toBe('Task not found');
+    });
+
     it('should toggle task done status', async () => {
       const getTasks = await request(app).get('/api/tasks');
       const taskId = getTasks.body[0].id;

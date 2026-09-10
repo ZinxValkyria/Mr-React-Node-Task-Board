@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
+const API_URL = import.meta.env.VITE_API_URL ?? '';
+
 const priorityColors = {
   High: 'bg-red-500/15 text-red-300 ring-1 ring-red-500/30',
   Medium: 'bg-amber-500/15 text-amber-300 ring-1 ring-amber-500/30',
@@ -8,6 +10,8 @@ const priorityColors = {
 
 function App() {
   const [tasks, setTasks] = useState([]);
+  const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
     title: '',
     category: 'General',
@@ -15,10 +19,13 @@ function App() {
   });
 
   useEffect(() => {
-    fetch('http://localhost:3001/api/tasks')
-      .then((res) => res.json())
+    fetch(`${API_URL}/api/tasks`)
+      .then((res) => {
+        if (!res.ok) throw new Error('Could not load tasks');
+        return res.json();
+      })
       .then((data) => setTasks(data))
-      .catch((err) => console.error(err));
+      .catch(() => setError('Could not connect to the task API.'));
   }, []);
 
   const stats = useMemo(() => {
@@ -34,26 +41,41 @@ function App() {
 
     if (!form.title.trim()) return;
 
-    const res = await fetch('http://localhost:3001/api/tasks', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(form),
-    });
+    setSaving(true);
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(form),
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not create task');
 
-    const newTask = await res.json();
-    setTasks((prev) => [newTask, ...prev]);
-    setForm({ title: '', category: 'General', priority: 'Medium' });
+      setTasks((prev) => [body, ...prev]);
+      setForm({ title: '', category: 'General', priority: 'Medium' });
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
   };
 
   const toggleTask = async (id) => {
-    const res = await fetch(`http://localhost:3001/api/tasks/${id}/toggle`, {
-      method: 'PATCH',
-    });
+    setError('');
+    try {
+      const res = await fetch(`${API_URL}/api/tasks/${id}/toggle`, {
+        method: 'PATCH',
+      });
+      const body = await res.json();
+      if (!res.ok) throw new Error(body.error || 'Could not update task');
 
-    const updatedTask = await res.json();
-    setTasks((prev) =>
-      prev.map((task) => (task.id === id ? updatedTask : task))
-    );
+      setTasks((prev) =>
+        prev.map((task) => (task.id === id ? body : task))
+      );
+    } catch (err) {
+      setError(err.message);
+    }
   };
 
   return (
@@ -74,7 +96,7 @@ function App() {
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-slate-300 shadow-2xl shadow-cyan-950/30">
-            API: <span className="font-semibold text-cyan-300">localhost:3001</span>
+            API: <span className="font-semibold text-cyan-300">{API_URL || 'same origin'}</span>
           </div>
         </div>
 
@@ -91,6 +113,12 @@ function App() {
             <p className="mt-2 text-sm text-slate-400">
               Create a new task and send it straight to your Node API.
             </p>
+
+            {error && (
+              <div role="alert" className="mt-4 rounded-xl border border-red-500/30 bg-red-500/10 p-3 text-sm text-red-200">
+                {error}
+              </div>
+            )}
 
             <form onSubmit={handleSubmit} className="mt-6 space-y-4">
               <div>
@@ -129,9 +157,10 @@ function App() {
 
               <button
                 type="submit"
-                className="w-full rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300"
+                disabled={saving}
+                className="w-full disabled:cursor-not-allowed disabled:opacity-60 rounded-2xl bg-cyan-400 px-4 py-3 font-semibold text-slate-950 transition hover:bg-cyan-300"
               >
-                Create task
+                {saving ? 'Creating…' : 'Create task'}
               </button>
             </form>
           </section>
